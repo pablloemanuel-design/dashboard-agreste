@@ -290,5 +290,256 @@ async function loadMap(id){
   else status.textContent="Mapa geográfico indisponível nesta conexão. A lista de municípios e os filtros continuam funcionando.";
  }catch(err){status.textContent="Mapa geográfico indisponível nesta conexão; a lista territorial permanece funcional."}
 }
+
+
+/* PCM_PRIORIZACAO_20261013
+   Fonte vigente do sequenciamento de 100 dias:
+   Priorização PCM_Plano_100_Dias_Agreste_Atualizado_OS.xlsx — 13/10/2026.
+   ORION 29/09 permanece como referência de ganhos, capacidade, custos rastreáveis e horizontes 1/2 anos.
+*/
+var pcmRuntime={loaded:false,source:"Priorização PCM_Plano_100_Dias_Agreste_Atualizado_OS.xlsx",version:"13/10/2026",history:"483 → 487 → 529"};
+var pcmPrevious={init:initPlan,apply:applyPlan,render:renderPlan,detail:openDetail};
+var pcmBandOrder={"Dias 0–30":0,"Dias 0–60":1,"Dias 31–60":2,"Dias 61–89":3,"Após 90 dias":4,"Após 100 dias":5};
+var pcmClassOrder={"P0.1":0,"P0.2":1,"P1":2,"P2":3,"A verificar":4,"A avaliar":5};
+
+function pcmBadgeClass(v){
+ var t=norm(v);
+ if(t==="p0.1"||t==="p0.2"||t.indexOf("critica")>=0)return "b-red";
+ if(t==="p1"||t.indexOf("alta")>=0)return "b-amber";
+ return "b-gray";
+}
+function pcmNum(v){return Number(v||0).toLocaleString("pt-BR")}
+function pcmUnique(rows,key){return new Set(rows.map(function(r){return norm(r[key])}).filter(Boolean)).size}
+function pcmCount(rows,key,value){return rows.filter(function(r){return r[key]===value}).length}
+function pcmSort(a,b){
+ var ba=pcmBandOrder[a["Faixa PCM"]]??99,bb=pcmBandOrder[b["Faixa PCM"]]??99;if(ba!==bb)return ba-bb;
+ var ca=pcmClassOrder[a["Classe PCM"]]??99,cb=pcmClassOrder[b["Classe PCM"]]??99;if(ca!==cb)return ca-cb;
+ var sa=Number(a["Pontuação PCM"]||0),sb=Number(b["Pontuação PCM"]||0);if(sa!==sb)return sb-sa;
+ return Number(a["Ordem PCM Fonte"]||9999)-Number(b["Ordem PCM Fonte"]||9999);
+}
+async function pcmFetchCompact(){
+ var res=await fetch("data/pcm_20261013.json.gz.b64?v=20261013",{cache:"no-store"});
+ if(!res.ok)throw new Error("Base PCM "+res.status);
+ var b64=(await res.text()).trim(),bin=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0)});
+ if(typeof DecompressionStream==="undefined")throw new Error("Navegador sem suporte à descompressão da base PCM");
+ var stream=new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
+ return JSON.parse(await new Response(stream).text());
+}
+function pcmBuildRows(P){
+ var d=P.d,old=PLAN100.slice(),byKey=new Map();
+ old.forEach(function(r){
+  var key=norm(r["ID GeoHub"])+"|"+norm(r.Intervencao);
+  if(!byKey.has(key))byKey.set(key,r);
+ });
+ var rows=P.r.map(function(x,idx){
+  var id=x[0],polo=d.polo[x[1]]||"",mun=d.mun[x[2]]||"",unit=x[3]||"",sys=d.sys[x[4]]||"",disc=d.disc[x[5]]||"";
+  var action=d.action[x[6]]||"",prio=d.prio[x[7]]||"A avaliar",cls=d.cls[x[8]]||"A avaliar",band=d.band[x[9]]||"A avaliar";
+  var score=Number(x[10]||0),fact=d.fact[x[11]]||"Não informado",resp=d.resp[x[12]]||"A definir";
+  var gain=d.gain[x[13]]||"",ind=d.ind[x[14]]||"",problem=d.problem[x[15]]||"";
+  var hist=byKey.get(norm(id)+"|"+norm(action))||null;
+  var ben=O.benefits.find(function(z){return norm(z["Família de intervenção"])===norm(action)})||null;
+  var expected=gain||(ben&&ben["Ganho esperado"])||"Ganho qualitativo pendente de linha de base";
+  var indicator=ind||(ben&&ben.Indicador)||"Indicador a definir após diagnóstico e linha de base";
+  var crit=norm(prio).indexOf("critica")>=0?"Crítica":norm(prio).indexOf("alta")>=0?"Alta":"A avaliar";
+  var cost=hist?Number(hist["Custo do horizonte (R$)"]||hist["Custo Base TPF"]||0):0;
+  var parsedId=/^\d+$/.test(String(id))?Number(id):String(id);
+  return {
+   "ID Plano":hist&&hist["ID Plano"]?hist["ID Plano"]:"PCM-20261013-"+String(idx+1).padStart(3,"0")+"-"+String(id).replace(/\s+/g,"-"),
+   "ID GeoHub":parsedId,
+   "Polo":"Polo "+polo,
+   "Municipio":mun,
+   "Localidade":hist?hist.Localidade:"",
+   "Instalacao":unit,
+   "Sistema":sys,
+   "Tipo Instalacao":hist?hist["Tipo Instalacao"]:"",
+   "Ativo":hist&&hist.Ativo?hist.Ativo:unit,
+   "Problema Identificado":problem||(hist&&hist["Problema Identificado"])||"A detalhar conforme programação PCM",
+   "Intervencao":action,
+   "Justificativa":hist&&hist.Justificativa?hist.Justificativa:"Sequenciamento definido pela priorização PCM vigente.",
+   "Disciplina":disc,
+   "Grupo Trabalho":hist&&hist["Grupo Trabalho"]?hist["Grupo Trabalho"]:"PCM / Eletromecânica",
+   "Prioridade":prio,
+   "Prioridade Municipio":hist&&hist["Prioridade Municipio"]?hist["Prioridade Municipio"]:"",
+   "Horizonte":"Plano de 100 Dias",
+   "Criticidade":crit,
+   "Risco Operacional":hist&&hist["Risco Operacional"]?hist["Risco Operacional"]:crit,
+   "Necessidade CMB":hist&&hist["Necessidade CMB"]?hist["Necessidade CMB"]:"Não informado",
+   "Necessidade Motor":hist&&hist["Necessidade Motor"]?hist["Necessidade Motor"]:"Não informado",
+   "Necessidade Reserva":hist&&hist["Necessidade Reserva"]?hist["Necessidade Reserva"]:"Não informado",
+   "Custo Base TPF":cost>0?cost:null,
+   "Custo do horizonte (R$)":cost>0?cost:null,
+   "Custo Tipo":cost>0?"Referência rastreada da base gerencial ORION 29/09; não recalculada pela priorização PCM":"Não precificado na revisão PCM",
+   "Fonte Informacao":pcmRuntime.source+(hist&&hist["Fonte Informacao"]?" | Rastreabilidade histórica: "+hist["Fonte Informacao"]:""),
+   "Origem Horizonte":"Priorização PCM vigente — 13/10/2026",
+   "Nivel Confianca":"Factibilidade PCM: "+fact,
+   "Status":"Execução não informada",
+   "Dependencias":ben?ben.Dependências:"Dependências específicas a confirmar na programação e liberação da OS.",
+   "Mudanca vs Anterior":"Sequenciamento atualizado pelo PCM em 13/10/2026",
+   "Observacoes Tecnicas":"Classe PCM: "+cls+" | Faixa: "+band+" | Pontuação: "+score,
+   "Governança":"Plano vigente — Priorização PCM 13/10/2026",
+   "Faixa PCM":band,
+   "Classe PCM":cls,
+   "Pontuação PCM":score,
+   "Factível 100 dias?":fact,
+   "Responsável PCM":resp,
+   "Dia inicial PCM":x[17]||"",
+   "Dia final PCM":x[18]||"",
+   "Linha matriz PCM":x[19]||"",
+   "Ordem PCM Fonte":Number(x[16]||idx+1),
+   "Ganho esperado":expected,
+   "Indicador":indicator,
+   "Classe de benefício":ben?ben["Classe de benefício"]:"A classificar após diagnóstico",
+   "Tipo de ganho":ben?ben["Tipo de ganho"]:"Ganho qualitativo / redução de risco a validar",
+   "Ganho rápido":ben?ben["Ganho rápido"]:"A validar em campo",
+   "Esforço preliminar":ben?ben.Esforço:"A estimar",
+   "Equipe executora":resp,
+   "Dependências gerenciais":ben?ben.Dependências:"Programação, materiais, acesso, janela e liberação operacional.",
+   "Realização do benefício":ben?ben["Realização do benefício"]:"Após execução, teste, aceite e evidência registrada.",
+   "Linha de base":"A medir / confirmar em campo",
+   "Meta quantitativa":"A definir após linha de base"
+  };
+ });
+ rows.sort(pcmSort);
+ var exp={"Dias 0–30":163,"Dias 0–60":6,"Dias 31–60":124,"Dias 61–89":177,"Após 90 dias":31,"Após 100 dias":28};
+ if(rows.length!==529)throw new Error("PCM: esperado 529 ações, recebido "+rows.length);
+ Object.keys(exp).forEach(function(k){var n=pcmCount(rows,"Faixa PCM",k);if(n!==exp[k])throw new Error("PCM: "+k+" esperado "+exp[k]+", recebido "+n)});
+ return rows;
+}
+function pcmSummaryHtml(){
+ return "<section class=\"orion-section pcm-priority-summary\"><div class=\"section-kicker\">Fonte vigente do sequenciamento</div><h3>Priorização PCM — 13/10/2026</h3>"+
+ "<p class=\"orion-small\">A carteira detalhada abaixo segue a ordem operacional definida pelo PCM: <b>faixa temporal → classe da matriz → pontuação decrescente → ordem da fonte</b>. Classe da matriz e prioridade do plano permanecem campos distintos.</p>"+
+ "<div class=\"pcm-band-grid\">"+
+ [["D0–30",163,"Dias 0–30"],["D0–60",6,"Dias 0–60"],["D31–60",124,"Dias 31–60"],["D61–89",177,"Dias 61–89"],["Após D90",31,"Após 90 dias"],["Após D100",28,"Após 100 dias"]].map(function(x){return "<button type=\"button\" data-pcm-band=\""+x[2]+"\" onclick=\"pcmBandQuick('"+x[2]+"')\"><b>"+x[1]+"</b><span>"+x[0]+"</span></button>"}).join("")+
+ "</div><div class=\"orion-alert\"><b>Evolução da carteira:</b> 483 → 487 → <b>529 ações</b>. As 42 novas ações da Operação foram incorporadas à priorização vigente; informações complementares também foram conciliadas em registros existentes. As 15 propostas de dosagem química mantidas em “Evoluções técnicas em análise” continuam fora dos compromissos oficiais.</div>"+
+ "<div class=\"orion-alert red\"><b>Regra de antecipação:</b> as 25 automações de nível avaliadas em cenários de antecipação não foram reclassificadas como D0–30. O dashboard mantém a faixa oficial registrada pelo PCM.</div></section>";
+}
+window.pcmBandQuick=function(v){
+ var sel=document.getElementById("p100_band");if(!sel)return;sel.value=sel.value===v?"":v;applyPlan("p100");
+ var target=document.querySelector("#p100 .table-panel");if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+};
+function pcmDecoratePanel(id){
+ if(id!=="p100"||!pcmRuntime.loaded)return;
+ var panel=document.getElementById("p100");if(!panel)return;
+ if(!document.getElementById("p100_pcm_summary")){
+  var wrap=document.createElement("div");wrap.id="p100_pcm_summary";wrap.innerHTML=pcmSummaryHtml();
+  var head=panel.querySelector(".plan-head");if(head)head.before(wrap);else panel.prepend(wrap);
+ }
+ var toolbar=panel.querySelector(".filters .toolbar");
+ if(toolbar&&!document.getElementById("p100_band")){
+  var band=document.createElement("select");band.className="select";band.id="p100_band";band.setAttribute("aria-label","Faixa PCM");band.innerHTML="<option value=\"\">Faixa PCM</option>"+Object.keys(pcmBandOrder).map(function(v){return "<option>"+esc(v)+"</option>"}).join("");band.onchange=function(){applyPlan("p100")};
+  var cls=document.createElement("select");cls.className="select";cls.id="p100_pcmclass";cls.setAttribute("aria-label","Classe PCM");cls.innerHTML="<option value=\"\">Classe PCM</option>"+Object.keys(pcmClassOrder).map(function(v){return "<option>"+esc(v)+"</option>"}).join("");cls.onchange=function(){applyPlan("p100")};
+  toolbar.appendChild(band);toolbar.appendChild(cls);toolbar.classList.add("pcm-toolbar");
+ }
+ var kick=panel.querySelector(":scope > .section-kicker");if(kick)kick.textContent="Plano de 100 Dias · Priorização PCM vigente em 13/10/2026";
+}
+phaseHtml=function(){
+ var phases=[
+  ["D0–D30","163 ações","Segurança, criticidade imediata, diagnóstico e ganhos executáveis no primeiro ciclo."],
+  ["D0–D60","6 ações","Ações transversais cujo prazo oficial atravessa os dois primeiros ciclos."],
+  ["D31–D60","124 ações","Instrumentação prioritária, correções e recuperações programadas após diagnóstico."],
+  ["D61–D89","177 ações","Maior bloco da carteira: infraestrutura, adequações e intervenções condicionadas a materiais/janelas."],
+  ["Após D90","31 ações","Início no dia 91 e término a definir, conforme fonte PCM; não confundir com ganho realizado."],
+  ["Após D100","28 ações","Continuidade formal da carteira após o marco de 100 dias."]
+ ];
+ return "<section class=\"orion-section\"><h3>Curva de execução — sequenciamento PCM</h3><div class=\"orion-phases pcm-phases\">"+phases.map(function(p){return "<div class=\"orion-phase\"><b>"+p[0]+"</b><strong>"+p[1]+"</strong><p>"+p[2]+"</p></div>"}).join("")+"</div><p class=\"orion-alert\">A base vigente não possui ações explicitamente classificadas como “Dias 90–100”. A categoria “Após 90 dias” começa no dia 91 e permanece com término a definir. Benefício só é reconhecido após execução, teste, aceite e evidência.</p></section>";
+};
+
+initPlan=function(id){
+ pcmPrevious.init(id);
+ if(id==="p100"&&pcmRuntime.loaded){pcmDecoratePanel(id);applyPlan(id)}
+};
+applyPlan=function(id){
+ if(id!=="p100"||!pcmRuntime.loaded){pcmPrevious.apply(id);return}
+ var st=states[id],q=String(document.getElementById(id+"_q").value||"").toLowerCase();
+ var tests=[["Polo",id+"_polo"],["Municipio",id+"_muni"],["Sistema",id+"_sist"],["Disciplina",id+"_disc"],["Prioridade",id+"_prio"],["Criticidade",id+"_critf"],["Instalacao",id+"_local"],["Tipo de ganho",id+"_gain"],["Faixa PCM",id+"_band"],["Classe PCM",id+"_pcmclass"]];
+ var quick=document.getElementById(id+"_quick");
+ st.filtered=st.all.filter(function(r){
+  if(q&&Object.values(r).join(" ").toLowerCase().indexOf(q)===-1)return false;
+  if(!tests.every(function(t){var el=document.getElementById(t[1]);return !el||!el.value||String(r[t[0]]||"")===el.value}))return false;
+  if(quick&&quick.value){var v=norm(r["Ganho rápido"]);if(quick.value==="sim"&&!v.startsWith("sim"))return false;if(quick.value==="potencial"&&!v.startsWith("potencial"))return false;if(quick.value==="nao"&&(v.startsWith("sim")||v.startsWith("potencial")))return false}
+  return true;
+ });
+ renderPlan(id);
+};
+renderPlan=function(id){
+ pcmPrevious.render(id);
+ if(id!=="p100"||!pcmRuntime.loaded||!states[id])return;
+ var d=states[id].filtered,panel=document.getElementById(id),tr=panel&&panel.querySelector(".table-panel thead tr"),tb=document.getElementById(id+"_tbody");
+ if(tr)tr.innerHTML="<th># PCM</th><th>Faixa PCM</th><th>Classe PCM</th><th>Instalação</th><th>Polo</th><th>Município</th><th>Sistema</th><th>Disciplina</th><th>Problema</th><th>Intervenção</th><th>Prioridade</th><th>Pontuação</th><th>Custo rastreado</th>";
+ if(tb)tb.innerHTML=d.map(function(r,i){
+  var idx=states[id].all.indexOf(r),cost=r["Custo do horizonte (R$)"];
+  return "<tr class=\"data-row\" onclick=\"openDetail('p100',"+idx+")\">"+
+   "<td><b>"+(i+1)+"</b><div class=\"small\">ordem "+esc(r["Ordem PCM Fonte"])+"</div></td>"+
+   "<td>"+badge(r["Faixa PCM"],pcmBadgeClass(r["Classe PCM"]))+"</td>"+
+   "<td>"+badge(r["Classe PCM"],pcmBadgeClass(r["Classe PCM"]))+"</td>"+
+   "<td><div class=\"strong\">"+esc(r.Instalacao)+"</div><div class=\"small\">ID "+esc(r["ID GeoHub"])+"</div></td>"+
+   "<td>"+esc(r.Polo)+"</td><td>"+esc(r.Municipio||"A confirmar")+"</td><td>"+esc(r.Sistema)+"</td><td>"+esc(r.Disciplina)+"</td>"+
+   "<td>"+esc(r["Problema Identificado"])+"</td><td>"+esc(r.Intervencao)+"</td>"+
+   "<td>"+badge(r.Prioridade,clsPriority(r.Prioridade))+"</td><td><b>"+esc(r["Pontuação PCM"])+"</b></td>"+
+   "<td class=\"money strong\">"+(cost?money(cost):badge("A orçar","b-amber"))+"</td></tr>";
+ }).join("");
+ var tc=document.getElementById(id+"_tableCount");if(tc)tc.textContent=d.length+" registros · ordenação PCM vigente";
+};
+openDetail=function(id,index){
+ pcmPrevious.detail(id,index);
+ if(id!=="p100"||!pcmRuntime.loaded)return;
+ var r=states[id]&&states[id].all[index],body=document.getElementById("drawerBody");if(!r||!body)return;
+ body.insertAdjacentHTML("afterbegin","<div class=\"orion-section pcm-detail\"><h3>Priorização PCM — 13/10/2026</h3><div class=\"detailgrid\">"+
+  [["Faixa PCM",r["Faixa PCM"]],["Classe PCM",r["Classe PCM"]],["Pontuação PCM",r["Pontuação PCM"]],["Factível 100 dias?",r["Factível 100 dias?"]],["Dia inicial",r["Dia inicial PCM"]],["Dia final",r["Dia final PCM"]],["Responsável",r["Responsável PCM"]],["Ordem na fonte",r["Ordem PCM Fonte"]]].map(function(x){return "<div class=\"detail\"><div class=\"dlabel\">"+esc(x[0])+"</div><div class=\"dval\">"+esc(x[1]||"Não informado")+"</div></div>"}).join("")+
+  "</div><p class=\"orion-small\">Fonte vigente do sequenciamento: "+esc(pcmRuntime.source)+". O custo, quando presente, é apenas rastreado da base gerencial anterior e não foi criado pela priorização PCM.</p></div>");
+};
+function pcmRefreshExecutive(rows){
+ var total=rows.length+plans.p1.length+plans.p2.length,critical=rows.filter(function(r){return r.Criticidade==="Crítica"}).length+
+  plans.p1.filter(function(r){return r.Criticidade==="Crítica"}).length+plans.p2.filter(function(r){return r.Criticidade==="Crítica"}).length;
+ var cost=Number(SUMMARY["100d"].custo||0)+Number(SUMMARY["1ano"].custo||0)+Number(SUMMARY["2anos"].custo||0);
+ var heroes=document.querySelectorAll("#executivo .hero-grid .hero");
+ if(heroes[0]){heroes[0].querySelector(".val").textContent=pcmNum(total);heroes[0].querySelector(".sub").textContent="intervenções: priorização PCM 100 dias + horizontes gerenciais de 1 e 2 anos"}
+ if(heroes[1]){heroes[1].querySelector(".val").textContent=pcmNum(critical);heroes[1].querySelector(".sub").textContent="classificações críticas nas bases vigentes"}
+ if(heroes[2]){heroes[2].querySelector(".val").textContent=pcmNum(Number(SUMMARY["100d"].cmb||0)+Number(SUMMARY["1ano"].cmb||0)+Number(SUMMARY["2anos"].cmb||0));heroes[2].querySelector(".sub").textContent="necessidades CMB rastreadas; novas ações não foram inferidas"}
+ if(heroes[3]){heroes[3].querySelector(".lbl").textContent="Custo gerencial rastreado";heroes[3].querySelector(".val").textContent=money(cost);heroes[3].querySelector(".sub").textContent="somente valores disponíveis; lacunas permanecem a orçar"}
+ var cards=document.querySelectorAll("#executivo .summary-cards .horizon-card");
+ if(cards[0]){
+  cards[0].querySelector(".big").textContent="529 ações";var m=cards[0].querySelectorAll(".mini");
+  var vals=[pcmUnique(rows,"Instalacao"),pcmUnique(rows,"Municipio"),rows.filter(function(r){return r.Criticidade==="Crítica"}).length,SUMMARY["100d"].cmb,5,SUMMARY["100d"].custo?money(SUMMARY["100d"].custo):"A orçar"];
+  vals.forEach(function(v,i){if(m[i]&&m[i].querySelector("b"))m[i].querySelector("b").textContent=typeof v==="number"?pcmNum(v):v});
+  if(m[0])m[0].querySelector("span").textContent="instalações / unidades";
+  if(m[5])m[5].querySelector("span").textContent="custo rastreado";
+ }
+ var bars=document.querySelectorAll("#executivo .bar-row"),nums=[529,plans.p1.length,plans.p2.length],mx=Math.max.apply(null,nums);
+ bars.forEach(function(b,i){if(i>2)return;var val=b.querySelector(".bar-val"),fill=b.querySelector(".bar-fill");if(val)val.textContent=pcmNum(nums[i]);if(fill)fill.style.width=(nums[i]/mx*100).toFixed(1)+"%"});
+ var note=document.querySelector("#executivo .exec-lower .note");
+ if(note)note.innerHTML="<b>Governança vigente:</b> o sequenciamento do Plano de 100 Dias passa a seguir a <b>Priorização PCM de 13/10/2026</b>, com evolução 483 → 487 → 529 ações. ORION 29/09 permanece como referência de ganhos, capacidade e custos rastreáveis e continua vigente para os horizontes de 1 e 2 anos até nova revisão. As 15 propostas de dosagem química em análise permanecem separadas e não alteram os 529 compromissos.";
+ var title=document.querySelector(".title p");if(title)title.textContent="Aqua Pernambuco · BRK + Acciona · 100 dias: Priorização PCM 13/10/2026 · ganhos/capacidade: ORION 29/09/2026";
+ var footer=document.querySelector(".footer div:last-child");if(footer)footer.textContent="Última atualização do portal: 13/10/2026 · priorização PCM vigente e carteira de 529 ações";
+}
+async function pcmLoad(){
+ try{
+  var P=await pcmFetchCompact(),rows=pcmBuildRows(P);
+  PLAN100.splice(0,PLAN100.length,...rows);plans.p100=PLAN100;PLAN_CONFIG.p100.data=PLAN100;
+  var cost=rows.reduce(function(a,r){return a+Number(r["Custo do horizonte (R$)"]||0)},0);
+  SUMMARY["100d"].acoes=rows.length;
+  SUMMARY["100d"].instalacoes=pcmUnique(rows,"Instalacao");
+  SUMMARY["100d"].municipios=pcmUnique(rows,"Municipio");
+  SUMMARY["100d"].criticas=rows.filter(function(r){return r.Criticidade==="Crítica"}).length;
+  SUMMARY["100d"].cmb=rows.filter(function(r){return needsCmb(r["Necessidade CMB"])}).length;
+  SUMMARY["100d"].custo=cost;
+  pcmRuntime.loaded=true;
+  window.PCM_AUDIT={fonte:pcmRuntime.source,versao:pcmRuntime.version,total:529,historico:pcmRuntime.history,
+   faixas:Object.keys(pcmBandOrder).map(function(k){return [k,pcmCount(rows,"Faixa PCM",k)]}),
+   classes:Object.keys(pcmClassOrder).map(function(k){return [k,pcmCount(rows,"Classe PCM",k)]}),
+   criticas:SUMMARY["100d"].criticas,custoRastreado:cost,ordenacao:"faixa → classe → pontuação desc → ordem fonte"};
+  pcmRefreshExecutive(rows);
+  if(mapInstances.p100){try{mapInstances.p100.map.remove()}catch(e){}delete mapInstances.p100}
+  if(states.p100){delete states.p100;var panel=document.getElementById("p100");if(panel)panel.innerHTML="";if(activeTab==="p100")initPlan("p100")}
+ }catch(err){
+  console.error("Falha ao carregar priorização PCM:",err);
+  var note=document.createElement("div");note.className="orion-alert red";note.innerHTML="<b>Atenção:</b> a base PCM de 13/10/2026 não pôde ser carregada nesta conexão. O portal manteve a última base gerencial disponível.";var ex=document.getElementById("executivo");if(ex)ex.prepend(note);
+ }
+}
+var pcmStyle=document.createElement("style");
+pcmStyle.textContent=".pcm-priority-summary{border-top:4px solid #253d46}.pcm-band-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:12px 0}.pcm-band-grid button{background:#f7f7f5;border:1px solid var(--line);padding:11px;text-align:left;color:var(--graph);cursor:pointer}.pcm-band-grid button:hover{border-color:var(--graph2);background:#eef2f0}.pcm-band-grid b{display:block;font-size:22px}.pcm-band-grid span{font-size:10px;color:var(--steel);font-weight:700}.pcm-toolbar{grid-template-columns:2fr repeat(8,minmax(118px,1fr))!important}.pcm-phases{grid-template-columns:repeat(3,minmax(0,1fr))!important}.pcm-detail{margin-top:0!important;border-top:4px solid #253d46!important}@media(max-width:1100px){.pcm-band-grid{grid-template-columns:repeat(3,1fr)}.pcm-toolbar{grid-template-columns:repeat(3,1fr)!important}.pcm-toolbar .search{grid-column:1/-1}}@media(max-width:650px){.pcm-band-grid{grid-template-columns:repeat(2,1fr)}.pcm-phases{grid-template-columns:1fr!important}}";
+document.head.appendChild(pcmStyle);
+pcmLoad();
+
 document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;pids.forEach(function(id){var box=document.getElementById(id+"_mapsec");if(box&&box.classList.contains("orion-map-full")){box.classList.remove("orion-map-full");document.body.style.overflow="";var b=document.getElementById(id+"_expand");if(b){b.textContent="⛶ Ampliar mapa";b.setAttribute("aria-expanded","false")}if(mapInstances[id])mapInstances[id].map.invalidateSize()}})});
 })();
