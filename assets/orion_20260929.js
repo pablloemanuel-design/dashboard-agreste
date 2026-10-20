@@ -442,7 +442,7 @@ function pcmDecoratePanel(id){
   var cls=document.createElement("select");cls.className="select";cls.id="p100_pcmclass";cls.setAttribute("aria-label","Classe PCM");cls.innerHTML="<option value=\"\">Classe PCM</option>"+Object.keys(pcmClassOrder).map(function(v){return "<option>"+esc(v)+"</option>"}).join("");cls.onchange=function(){applyPlan("p100")};
   toolbar.appendChild(band);toolbar.appendChild(cls);toolbar.classList.add("pcm-toolbar");
  }
- var kick=panel.querySelector(":scope > .section-kicker");if(kick)kick.textContent="Plano de 100 Dias · Priorização PCM vigente em 20/10/2026";
+ var kick=panel.querySelector(":scope > .section-kicker");if(kick)kick.textContent="Plano de 100 Dias · Priorização PCM vigente em 20/10/2026";var labels=panel.querySelectorAll(".plan-head .label");if(labels[5])labels[5].textContent="Orçamento previsto";
 }
 phaseHtml=function(){
  var phases=[
@@ -477,7 +477,7 @@ renderPlan=function(id){
  pcmPrevious.render(id);
  if(id!=="p100"||!pcmRuntime.loaded||!states[id])return;
  var d=states[id].filtered,panel=document.getElementById(id),tr=panel&&panel.querySelector(".table-panel thead tr"),tb=document.getElementById(id+"_tbody");
- if(tr)tr.innerHTML="<th># PCM</th><th>Faixa PCM</th><th>Classe PCM</th><th>Instalação</th><th>Polo</th><th>Município</th><th>Sistema</th><th>Disciplina</th><th>Problema</th><th>Intervenção</th><th>Prioridade</th><th>Pontuação</th><th>Custo rastreado</th>";
+ if(tr)tr.innerHTML="<th># PCM</th><th>Faixa PCM</th><th>Classe PCM</th><th>Instalação</th><th>Polo</th><th>Município</th><th>Sistema</th><th>Disciplina</th><th>Problema</th><th>Intervenção</th><th>Prioridade</th><th>Pontuação</th><th>Orçamento previsto</th>";
  if(tb)tb.innerHTML=d.map(function(r,i){
   var idx=states[id].all.indexOf(r),cost=r["Custo do horizonte (R$)"];
   return "<tr class=\"data-row\" onclick=\"openDetail('p100',"+idx+")\">"+
@@ -488,7 +488,7 @@ renderPlan=function(id){
    "<td>"+esc(r.Polo)+"</td><td>"+esc(r.Municipio||"A confirmar")+"</td><td>"+esc(r.Sistema)+"</td><td>"+esc(r.Disciplina)+"</td>"+
    "<td>"+esc(r["Problema Identificado"])+"</td><td>"+esc(r.Intervencao)+"</td>"+
    "<td>"+badge(r.Prioridade,clsPriority(r.Prioridade))+"</td><td><b>"+esc(r["Pontuação PCM"])+"</b></td>"+
-   "<td class=\"money strong\">"+(cost?money(cost):badge("A orçar","b-amber"))+"</td></tr>";
+   "<td class=\"money strong\">"+money(cost)+"<div class=\"small\">"+esc(r["Custo Tipo"])+"</div></td></tr>";
  }).join("");
  var tc=document.getElementById(id+"_tableCount");if(tc)tc.textContent=d.length+" registros · ordem oficial da planilha PCM vigente";
 };
@@ -496,9 +496,9 @@ openDetail=function(id,index){
  pcmPrevious.detail(id,index);
  if(id!=="p100"||!pcmRuntime.loaded)return;
  var r=states[id]&&states[id].all[index],body=document.getElementById("drawerBody");if(!r||!body)return;
- body.insertAdjacentHTML("afterbegin","<div class=\"orion-section pcm-detail\"><h3>Priorização PCM — vigente em 20/10/2026</h3><div class=\"detailgrid\">"+
+ body.insertAdjacentHTML("afterbegin","<div class=\"orion-section pcm-detail\"><h3>Priorização PCM e orçamento previsto — 20/10/2026</h3><div class=\"pcm-budget-detail\"><b>"+money(r["Orçamento previsto (R$)"]||0)+"</b><span>"+esc(r["Custo Tipo"])+"</span><small>"+esc(r["Investimento principal"])+" · "+esc(r["Recurso / contrato relacionado"])+"</small><small>"+esc(r["Fonte do orçamento"])+"</small><small>"+esc(r["Confiabilidade do orçamento"])+"</small></div><div class=\"detailgrid\">"+
   [["Faixa PCM",r["Faixa PCM"]],["Classe PCM",r["Classe PCM"]],["Pontuação PCM",r["Pontuação PCM"]],["Factível 100 dias?",r["Factível 100 dias?"]],["Dia inicial",r["Dia inicial PCM"]],["Dia final",r["Dia final PCM"]],["Responsável",r["Responsável PCM"]],["Ordem na fonte",r["Ordem PCM Fonte"]]].map(function(x){return "<div class=\"detail\"><div class=\"dlabel\">"+esc(x[0])+"</div><div class=\"dval\">"+esc(x[1]||"Não informado")+"</div></div>"}).join("")+
-  "</div><p class=\"orion-small\">Fonte vigente do sequenciamento: "+esc(pcmRuntime.source)+". O custo, quando presente, é apenas rastreado da base gerencial anterior e não foi criado pela priorização PCM.</p></div>");
+  "</div><p class=\"orion-small\">Fonte vigente do sequenciamento: "+esc(pcmRuntime.source)+". O orçamento da linha é rastreado quando disponível; as 42 linhas originalmente sem custo recebem estimativa provisória da reserva gerencial, claramente identificada.</p></div>");
 };
 function pcmRefreshExecutive(rows){
  var total=rows.length+plans.p1.length+plans.p2.length,critical=rows.filter(function(r){return r.Criticidade==="Crítica"}).length+
@@ -550,6 +550,7 @@ async function pcmLoad(){
 }
 var pcmStyle=document.createElement("style");
 pcmStyle.textContent=".pcm-priority-summary{border-top:4px solid #253d46}.pcm-band-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:12px 0}.pcm-band-grid button{background:#f7f7f5;border:1px solid var(--line);padding:11px;text-align:left;color:var(--graph);cursor:pointer}.pcm-band-grid button:hover{border-color:var(--graph2);background:#eef2f0}.pcm-band-grid b{display:block;font-size:22px}.pcm-band-grid span{font-size:10px;color:var(--steel);font-weight:700}.pcm-toolbar{grid-template-columns:2fr repeat(8,minmax(118px,1fr))!important}.pcm-phases{grid-template-columns:repeat(3,minmax(0,1fr))!important}.pcm-detail{margin-top:0!important;border-top:4px solid #253d46!important}@media(max-width:1100px){.pcm-band-grid{grid-template-columns:repeat(3,1fr)}.pcm-toolbar{grid-template-columns:repeat(3,1fr)!important}.pcm-toolbar .search{grid-column:1/-1}}@media(max-width:650px){.pcm-band-grid{grid-template-columns:repeat(2,1fr)}.pcm-phases{grid-template-columns:1fr!important}}";
+pcmStyle.textContent+=".pcm-budget-detail{display:grid;gap:4px;background:#f5f7f6;border-left:4px solid var(--green);padding:12px;margin:0 0 14px}.pcm-budget-detail b{font-size:24px}.pcm-budget-detail span{font-weight:700}.pcm-budget-detail small{color:var(--steel)}";
 document.head.appendChild(pcmStyle);
 pcmLoad();
 
