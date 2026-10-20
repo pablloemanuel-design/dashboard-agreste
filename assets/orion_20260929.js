@@ -339,10 +339,20 @@ function pcmBuildRows(P){
   var expected=gain||(ben&&ben["Ganho esperado"])||"Ganho qualitativo pendente de linha de base";
   var indicator=ind||(ben&&ben.Indicador)||"Indicador a definir após diagnóstico e linha de base";
   var crit=norm(prio).indexOf("critica")>=0?"Crítica":norm(prio).indexOf("alta")>=0?"Alta":"A avaliar";
-  var cost=hist?Number(hist["Custo do horizonte (R$)"]||hist["Custo Base TPF"]||0):0;
+  var bkey=norm(id)+"|"+norm(action)+"|"+norm(unit),bsimple=norm(id)+"|"+norm(action);
+  var binfo=PCM_BUDGET_MAP_20261020.get(bkey)||PCM_BUDGET_SIMPLE_20261020.get(bsimple)||null;
+  var cost=binfo?Number(binfo[2]||0):0;
+  var costStatus=binfo?PCM_BUDGET_20261020.status[binfo[3]]:"Orçamento não conciliado";
+  var investment=binfo?PCM_BUDGET_20261020.investment[binfo[4]]:"A classificar";
+  var resource=binfo?PCM_BUDGET_20261020.resource[binfo[5]]:"A definir";
+  var provisional=!!(binfo&&binfo[6]);
+  var costSource=provisional?"Reserva gerencial de 20% distribuída por família de investimento; orçamento/cotação específica pendente":
+      (costStatus==="Valor informado na fonte"?"Valor informado no plano vigente":"Orçamento reconciliado com a base de custos anterior");
+  var costConfidence=provisional?"Baixa – valor provisório para planejamento; substituir por orçamento/cotação":
+      (cost===0?"Rastreado – sem custo direto segregado na base":"Rastreado");
   var parsedId=/^\d+$/.test(String(id))?Number(id):String(id);
   return {
-   "ID Plano":hist&&hist["ID Plano"]?hist["ID Plano"]:"PCM-20261013-"+String(idx+1).padStart(3,"0")+"-"+String(id).replace(/\s+/g,"-"),
+   "ID Plano":hist&&hist["ID Plano"]?hist["ID Plano"]:"PCM-20261020-"+String(idx+1).padStart(3,"0")+"-"+String(id).replace(/\s+/g,"-"),
    "ID GeoHub":parsedId,
    "Polo":"Polo "+polo,
    "Municipio":mun,
@@ -364,17 +374,22 @@ function pcmBuildRows(P){
    "Necessidade CMB":hist&&hist["Necessidade CMB"]?hist["Necessidade CMB"]:"Não informado",
    "Necessidade Motor":hist&&hist["Necessidade Motor"]?hist["Necessidade Motor"]:"Não informado",
    "Necessidade Reserva":hist&&hist["Necessidade Reserva"]?hist["Necessidade Reserva"]:"Não informado",
-   "Custo Base TPF":cost>0?cost:null,
-   "Custo do horizonte (R$)":cost>0?cost:null,
-   "Custo Tipo":cost>0?"Referência rastreada da base gerencial ORION 29/09; não recalculada pela priorização PCM":"Não precificado na revisão PCM",
+   "Custo Base TPF":cost,
+   "Custo do horizonte (R$)":cost,
+   "Orçamento previsto (R$)":cost,
+   "Custo Tipo":costStatus,
+   "Fonte do orçamento":costSource,
+   "Confiabilidade do orçamento":costConfidence,
+   "Investimento principal":investment,
+   "Recurso / contrato relacionado":resource,
    "Fonte Informacao":pcmRuntime.source+(hist&&hist["Fonte Informacao"]?" | Rastreabilidade histórica: "+hist["Fonte Informacao"]:""),
-   "Origem Horizonte":"Priorização PCM vigente — 13/10/2026",
+   "Origem Horizonte":"Priorização PCM vigente — 20/10/2026",
    "Nivel Confianca":"Factibilidade PCM: "+fact,
    "Status":"Execução não informada",
    "Dependencias":ben?ben.Dependências:"Dependências específicas a confirmar na programação e liberação da OS.",
-   "Mudanca vs Anterior":"Sequenciamento atualizado pelo PCM em 13/10/2026",
+   "Mudanca vs Anterior":"Sequenciamento atualizado pelo PCM em 20/10/2026",
    "Observacoes Tecnicas":"Classe PCM: "+cls+" | Faixa: "+band+" | Pontuação: "+score,
-   "Governança":"Plano vigente — Priorização PCM 13/10/2026",
+   "Governança":"Plano vigente — PCM 20/10/2026",
    "Faixa PCM":band,
    "Classe PCM":cls,
    "Pontuação PCM":score,
@@ -511,7 +526,7 @@ function pcmRefreshExecutive(rows){
 }
 async function pcmLoad(){
  try{
-  var P=await pcmFetchCompact(),rows=pcmBuildRows(P);
+  var P=await pcmFetchCompact();pcmRuntime.budget=PCM_BUDGET_20261020.meta;var rows=pcmBuildRows(P);
   PLAN100.splice(0,PLAN100.length,...rows);plans.p100=PLAN100;PLAN_CONFIG.p100.data=PLAN100;
   var cost=rows.reduce(function(a,r){return a+Number(r["Custo do horizonte (R$)"]||0)},0);
   SUMMARY["100d"].acoes=rows.length;
