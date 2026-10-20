@@ -292,12 +292,12 @@ async function loadMap(id){
 }
 
 
-/* PCM_PRIORIZACAO_20261013
+/* PCM_PRIORIZACAO_20261020
    Fonte vigente do sequenciamento de 100 dias:
-   Priorização PCM_Plano_100_Dias_Agreste_Atualizado_OS.xlsx — 13/10/2026.
+   03. Plano atualizado de 529 intervenções.xlsx — vigente em 20/10/2026.
    ORION 29/09 permanece como referência de ganhos, capacidade, custos rastreáveis e horizontes 1/2 anos.
 */
-var pcmRuntime={loaded:false,source:"Priorização PCM_Plano_100_Dias_Agreste_Atualizado_OS.xlsx",version:"13/10/2026",history:"483 → 487 → 529"};
+var pcmRuntime={loaded:false,source:"03. Plano atualizado de 529 intervenções.xlsx",version:"20/10/2026",history:"483 → 487 → 529",reordered:68};
 var pcmPrevious={init:initPlan,apply:applyPlan,render:renderPlan,detail:openDetail};
 var pcmBandOrder={"Dias 0–30":0,"Dias 0–60":1,"Dias 31–60":2,"Dias 61–89":3,"Após 90 dias":4,"Após 100 dias":5};
 var pcmClassOrder={"P0.1":0,"P0.2":1,"P1":2,"P2":3,"A verificar":4,"A avaliar":5};
@@ -311,14 +311,9 @@ function pcmBadgeClass(v){
 function pcmNum(v){return Number(v||0).toLocaleString("pt-BR")}
 function pcmUnique(rows,key){return new Set(rows.map(function(r){return norm(r[key])}).filter(Boolean)).size}
 function pcmCount(rows,key,value){return rows.filter(function(r){return r[key]===value}).length}
-function pcmSort(a,b){
- var ba=pcmBandOrder[a["Faixa PCM"]]??99,bb=pcmBandOrder[b["Faixa PCM"]]??99;if(ba!==bb)return ba-bb;
- var ca=pcmClassOrder[a["Classe PCM"]]??99,cb=pcmClassOrder[b["Classe PCM"]]??99;if(ca!==cb)return ca-cb;
- var sa=Number(a["Pontuação PCM"]||0),sb=Number(b["Pontuação PCM"]||0);if(sa!==sb)return sb-sa;
- return Number(a["Ordem PCM Fonte"]||9999)-Number(b["Ordem PCM Fonte"]||9999);
-}
+function pcmSort(a,b){return Number(a["Ordem PCM Fonte"]||9999)-Number(b["Ordem PCM Fonte"]||9999)}
 async function pcmFetchCompact(){
- var res=await fetch("data/pcm_20261013.json.gz.b64?v=20261013",{cache:"no-store"});
+ var res=await fetch("data/pcm_20261020.json.gz.b64?v=20261020",{cache:"no-store"});
  if(!res.ok)throw new Error("Base PCM "+res.status);
  var b64=(await res.text()).trim(),bin=Uint8Array.from(atob(b64),function(c){return c.charCodeAt(0)});
  if(typeof DecompressionStream==="undefined")throw new Error("Navegador sem suporte à descompressão da base PCM");
@@ -399,19 +394,18 @@ function pcmBuildRows(P){
    "Meta quantitativa":"A definir após linha de base"
   };
  });
- rows.sort(pcmSort);
  var exp={"Dias 0–30":163,"Dias 0–60":6,"Dias 31–60":124,"Dias 61–89":177,"Após 90 dias":31,"Após 100 dias":28};
  if(rows.length!==529)throw new Error("PCM: esperado 529 ações, recebido "+rows.length);
  Object.keys(exp).forEach(function(k){var n=pcmCount(rows,"Faixa PCM",k);if(n!==exp[k])throw new Error("PCM: "+k+" esperado "+exp[k]+", recebido "+n)});
  return rows;
 }
 function pcmSummaryHtml(){
- return "<section class=\"orion-section pcm-priority-summary\"><div class=\"section-kicker\">Fonte vigente do sequenciamento</div><h3>Priorização PCM — 13/10/2026</h3>"+
- "<p class=\"orion-small\">A carteira detalhada abaixo segue a ordem operacional definida pelo PCM: <b>faixa temporal → classe da matriz → pontuação decrescente → ordem da fonte</b>. Classe da matriz e prioridade do plano permanecem campos distintos.</p>"+
+ return "<section class=\"orion-section pcm-priority-summary\"><div class=\"section-kicker\">Fonte vigente do sequenciamento</div><h3>Priorização PCM — versão vigente 20/10/2026</h3>"+
+ "<p class=\"orion-small\">A carteira detalhada abaixo segue <b>exatamente a ordem das linhas da planilha vigente do PCM</b>. O dashboard não reclassifica nem reordena as OS por faixa, classe ou pontuação. Esses campos permanecem disponíveis para leitura e filtro, mas a sequência oficial é a registrada na fonte.</p>"+
  "<div class=\"pcm-band-grid\">"+
  [["D0–30",163,"Dias 0–30"],["D0–60",6,"Dias 0–60"],["D31–60",124,"Dias 31–60"],["D61–89",177,"Dias 61–89"],["Após D90",31,"Após 90 dias"],["Após D100",28,"Após 100 dias"]].map(function(x){return "<button type=\"button\" data-pcm-band=\""+x[2]+"\" onclick=\"pcmBandQuick('"+x[2]+"')\"><b>"+x[1]+"</b><span>"+x[0]+"</span></button>"}).join("")+
- "</div><div class=\"orion-alert\"><b>Evolução da carteira:</b> 483 → 487 → <b>529 ações</b>. As 42 novas ações da Operação foram incorporadas à priorização vigente; informações complementares também foram conciliadas em registros existentes. As 15 propostas de dosagem química mantidas em “Evoluções técnicas em análise” continuam fora dos compromissos oficiais.</div>"+
- "<div class=\"orion-alert red\"><b>Regra de antecipação:</b> as 25 automações de nível avaliadas em cenários de antecipação não foram reclassificadas como D0–30. O dashboard mantém a faixa oficial registrada pelo PCM.</div></section>";
+ "</div><div class=\"orion-alert\"><b>Evolução da carteira:</b> 483 → 487 → <b>529 ações</b>. A revisão vigente mantém os mesmos 529 registros e quantitativos por faixa, porém altera a sequência de priorização: <b>68 registros mudaram de posição</b> em relação à versão anterior. As 15 propostas de dosagem química mantidas em “Evoluções técnicas em análise” continuam fora dos compromissos oficiais.</div>"+
+ "<div class=\"orion-alert red\"><b>Regra vigente:</b> prevalece a ordem registrada em “03. Plano atualizado de 529 intervenções.xlsx”. O dashboard não deve reconstruir uma prioridade própria a partir de pontuação, classe ou prazo.</div></section>";
 }
 window.pcmBandQuick=function(v){
  var sel=document.getElementById("p100_band");if(!sel)return;sel.value=sel.value===v?"":v;applyPlan("p100");
@@ -430,7 +424,7 @@ function pcmDecoratePanel(id){
   var cls=document.createElement("select");cls.className="select";cls.id="p100_pcmclass";cls.setAttribute("aria-label","Classe PCM");cls.innerHTML="<option value=\"\">Classe PCM</option>"+Object.keys(pcmClassOrder).map(function(v){return "<option>"+esc(v)+"</option>"}).join("");cls.onchange=function(){applyPlan("p100")};
   toolbar.appendChild(band);toolbar.appendChild(cls);toolbar.classList.add("pcm-toolbar");
  }
- var kick=panel.querySelector(":scope > .section-kicker");if(kick)kick.textContent="Plano de 100 Dias · Priorização PCM vigente em 13/10/2026";
+ var kick=panel.querySelector(":scope > .section-kicker");if(kick)kick.textContent="Plano de 100 Dias · Priorização PCM vigente em 20/10/2026";
 }
 phaseHtml=function(){
  var phases=[
@@ -469,7 +463,7 @@ renderPlan=function(id){
  if(tb)tb.innerHTML=d.map(function(r,i){
   var idx=states[id].all.indexOf(r),cost=r["Custo do horizonte (R$)"];
   return "<tr class=\"data-row\" onclick=\"openDetail('p100',"+idx+")\">"+
-   "<td><b>"+(i+1)+"</b><div class=\"small\">ordem "+esc(r["Ordem PCM Fonte"])+"</div></td>"+
+   "<td><b>"+esc(r["Ordem PCM Fonte"])+"</b><div class=\"small\">prioridade PCM</div></td>"+
    "<td>"+badge(r["Faixa PCM"],pcmBadgeClass(r["Classe PCM"]))+"</td>"+
    "<td>"+badge(r["Classe PCM"],pcmBadgeClass(r["Classe PCM"]))+"</td>"+
    "<td><div class=\"strong\">"+esc(r.Instalacao)+"</div><div class=\"small\">ID "+esc(r["ID GeoHub"])+"</div></td>"+
@@ -478,13 +472,13 @@ renderPlan=function(id){
    "<td>"+badge(r.Prioridade,clsPriority(r.Prioridade))+"</td><td><b>"+esc(r["Pontuação PCM"])+"</b></td>"+
    "<td class=\"money strong\">"+(cost?money(cost):badge("A orçar","b-amber"))+"</td></tr>";
  }).join("");
- var tc=document.getElementById(id+"_tableCount");if(tc)tc.textContent=d.length+" registros · ordenação PCM vigente";
+ var tc=document.getElementById(id+"_tableCount");if(tc)tc.textContent=d.length+" registros · ordem oficial da planilha PCM vigente";
 };
 openDetail=function(id,index){
  pcmPrevious.detail(id,index);
  if(id!=="p100"||!pcmRuntime.loaded)return;
  var r=states[id]&&states[id].all[index],body=document.getElementById("drawerBody");if(!r||!body)return;
- body.insertAdjacentHTML("afterbegin","<div class=\"orion-section pcm-detail\"><h3>Priorização PCM — 13/10/2026</h3><div class=\"detailgrid\">"+
+ body.insertAdjacentHTML("afterbegin","<div class=\"orion-section pcm-detail\"><h3>Priorização PCM — vigente em 20/10/2026</h3><div class=\"detailgrid\">"+
   [["Faixa PCM",r["Faixa PCM"]],["Classe PCM",r["Classe PCM"]],["Pontuação PCM",r["Pontuação PCM"]],["Factível 100 dias?",r["Factível 100 dias?"]],["Dia inicial",r["Dia inicial PCM"]],["Dia final",r["Dia final PCM"]],["Responsável",r["Responsável PCM"]],["Ordem na fonte",r["Ordem PCM Fonte"]]].map(function(x){return "<div class=\"detail\"><div class=\"dlabel\">"+esc(x[0])+"</div><div class=\"dval\">"+esc(x[1]||"Não informado")+"</div></div>"}).join("")+
   "</div><p class=\"orion-small\">Fonte vigente do sequenciamento: "+esc(pcmRuntime.source)+". O custo, quando presente, é apenas rastreado da base gerencial anterior e não foi criado pela priorização PCM.</p></div>");
 };
@@ -508,9 +502,9 @@ function pcmRefreshExecutive(rows){
  var bars=document.querySelectorAll("#executivo .bar-row"),nums=[529,plans.p1.length,plans.p2.length],mx=Math.max.apply(null,nums);
  bars.forEach(function(b,i){if(i>2)return;var val=b.querySelector(".bar-val"),fill=b.querySelector(".bar-fill");if(val)val.textContent=pcmNum(nums[i]);if(fill)fill.style.width=(nums[i]/mx*100).toFixed(1)+"%"});
  var note=document.querySelector("#executivo .exec-lower .note");
- if(note)note.innerHTML="<b>Governança vigente:</b> o sequenciamento do Plano de 100 Dias passa a seguir a <b>Priorização PCM de 13/10/2026</b>, com evolução 483 → 487 → 529 ações. ORION 29/09 permanece como referência de ganhos, capacidade e custos rastreáveis e continua vigente para os horizontes de 1 e 2 anos até nova revisão. As 15 propostas de dosagem química em análise permanecem separadas e não alteram os 529 compromissos.";
- var title=document.querySelector(".title p");if(title)title.textContent="Aqua Pernambuco · BRK + Acciona · 100 dias: Priorização PCM 13/10/2026 · ganhos/capacidade: ORION 29/09/2026";
- var footer=document.querySelector(".footer div:last-child");if(footer)footer.textContent="Última atualização do portal: 13/10/2026 · priorização PCM vigente e carteira de 529 ações";
+ if(note)note.innerHTML="<b>Governança vigente:</b> o Plano de 100 Dias passa a seguir a ordem registrada em <b>03. Plano atualizado de 529 intervenções.xlsx</b>, vigente em 20/10/2026. A revisão mantém 529 ações, mas altera a sequência de prioridade de 68 registros. ORION 29/09 permanece como referência de ganhos, capacidade e custos rastreáveis e continua vigente para os horizontes de 1 e 2 anos até nova revisão. As 15 propostas de dosagem química em análise permanecem separadas e não alteram os 529 compromissos.";
+ var title=document.querySelector(".title p");if(title)title.textContent="Aqua Pernambuco · BRK + Acciona · 100 dias: Plano PCM vigente 20/10/2026 · ganhos/capacidade: ORION 29/09/2026";
+ var footer=document.querySelector(".footer div:last-child");if(footer)footer.textContent="Última atualização do portal: 20/10/2026 · ordem priorizada PCM atualizada na carteira de 529 ações";
 }
 async function pcmLoad(){
  try{
@@ -527,13 +521,13 @@ async function pcmLoad(){
   window.PCM_AUDIT={fonte:pcmRuntime.source,versao:pcmRuntime.version,total:529,historico:pcmRuntime.history,
    faixas:Object.keys(pcmBandOrder).map(function(k){return [k,pcmCount(rows,"Faixa PCM",k)]}),
    classes:Object.keys(pcmClassOrder).map(function(k){return [k,pcmCount(rows,"Classe PCM",k)]}),
-   criticas:SUMMARY["100d"].criticas,custoRastreado:cost,ordenacao:"faixa → classe → pontuação desc → ordem fonte"};
+   criticas:SUMMARY["100d"].criticas,custoRastreado:cost,ordenacao:"ordem exata das linhas da planilha PCM vigente",registrosReposicionados:pcmRuntime.reordered};
   pcmRefreshExecutive(rows);
   if(mapInstances.p100){try{mapInstances.p100.map.remove()}catch(e){}delete mapInstances.p100}
   if(states.p100){delete states.p100;var panel=document.getElementById("p100");if(panel)panel.innerHTML="";if(activeTab==="p100")initPlan("p100")}
  }catch(err){
   console.error("Falha ao carregar priorização PCM:",err);
-  var note=document.createElement("div");note.className="orion-alert red";note.innerHTML="<b>Atenção:</b> a base PCM de 13/10/2026 não pôde ser carregada nesta conexão. O portal manteve a última base gerencial disponível.";var ex=document.getElementById("executivo");if(ex)ex.prepend(note);
+  var note=document.createElement("div");note.className="orion-alert red";note.innerHTML="<b>Atenção:</b> a base PCM vigente de 20/10/2026 não pôde ser carregada nesta conexão. O portal manteve a última base gerencial disponível.";var ex=document.getElementById("executivo");if(ex)ex.prepend(note);
  }
 }
 var pcmStyle=document.createElement("style");
