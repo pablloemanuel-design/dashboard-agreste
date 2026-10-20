@@ -417,12 +417,12 @@ function pcmBuildRows(P){
  Object.keys(exp).forEach(function(k){var n=pcmCount(rows,"Faixa PCM",k);if(n!==exp[k])throw new Error("PCM: "+k+" esperado "+exp[k]+", recebido "+n)});
  return rows;
 }
-function pcmSummaryHtml(){
+function pcmSummaryHtml(){var B=pcmRuntime.budget||{};
  return "<section class=\"orion-section pcm-priority-summary\"><div class=\"section-kicker\">Fonte vigente do sequenciamento</div><h3>Priorização PCM — versão vigente 20/10/2026</h3>"+
  "<p class=\"orion-small\">A carteira detalhada abaixo segue <b>exatamente a ordem das linhas da planilha vigente do PCM</b>. O dashboard não reclassifica nem reordena as OS por faixa, classe ou pontuação. Esses campos permanecem disponíveis para leitura e filtro, mas a sequência oficial é a registrada na fonte.</p>"+
  "<div class=\"pcm-band-grid\">"+
  [["D0–30",163,"Dias 0–30"],["D0–60",6,"Dias 0–60"],["D31–60",124,"Dias 31–60"],["D61–89",177,"Dias 61–89"],["Após D90",31,"Após 90 dias"],["Após D100",28,"Após 100 dias"]].map(function(x){return "<button type=\"button\" data-pcm-band=\""+x[2]+"\" onclick=\"pcmBandQuick('"+x[2]+"')\"><b>"+x[1]+"</b><span>"+x[0]+"</span></button>"}).join("")+
- "</div><div class=\"orion-alert\"><b>Evolução da carteira:</b> 483 → 487 → <b>529 ações</b>. A revisão vigente mantém os mesmos 529 registros e quantitativos por faixa, porém altera a sequência de priorização: <b>68 registros mudaram de posição</b> em relação à versão anterior. As 15 propostas de dosagem química mantidas em “Evoluções técnicas em análise” continuam fora dos compromissos oficiais.</div>"+
+ "</div><div class=\"pcm-budget-grid\"><div><b>"+money(B.knownSum||0)+"</b><span>487 ações com custo rastreado</span></div><div><b>"+money(B.reserveTotal||0)+"</b><span>42 estimativas provisórias</span></div><div><b>"+money(B.interventionBudget||0)+"</b><span>orçamento previsto das 529 intervenções</span></div><div><b>"+money(B.orion100||0)+"</b><span>ORION · estrutura 100 dias</span></div><div><b>"+money(B.contracts100||0)+"</b><span>possíveis acionamentos</span></div><div><b>"+money(B.recommended100||0)+"</b><span>orçamento recomendado 100 dias</span></div></div><div class=\"orion-alert\"><b>Evolução da carteira:</b> 483 → 487 → <b>529 ações</b>. A revisão vigente mantém os mesmos 529 registros e quantitativos por faixa, porém altera a sequência de priorização: <b>68 registros mudaram de posição</b> em relação à versão anterior. As 15 propostas de dosagem química mantidas em “Evoluções técnicas em análise” continuam fora dos compromissos oficiais.</div>"+
  "<div class=\"orion-alert red\"><b>Regra vigente:</b> prevalece a ordem registrada em “03. Plano atualizado de 529 intervenções.xlsx”. O dashboard não deve reconstruir uma prioridade própria a partir de pontuação, classe ou prazo.</div></section>";
 }
 window.pcmBandQuick=function(v){
@@ -503,24 +503,24 @@ openDetail=function(id,index){
 function pcmRefreshExecutive(rows){
  var total=rows.length+plans.p1.length+plans.p2.length,critical=rows.filter(function(r){return r.Criticidade==="Crítica"}).length+
   plans.p1.filter(function(r){return r.Criticidade==="Crítica"}).length+plans.p2.filter(function(r){return r.Criticidade==="Crítica"}).length;
- var cost=Number(SUMMARY["100d"].custo||0)+Number(SUMMARY["1ano"].custo||0)+Number(SUMMARY["2anos"].custo||0);
+ var cost=Number(SUMMARY["100d"].custo||0)+Number(SUMMARY["1ano"].custo||0)+Number(SUMMARY["2anos"].custo||0);var tab100=document.querySelector(".tab[data-tab=\"p100\"] .small");if(tab100)tab100.textContent="529";
  var heroes=document.querySelectorAll("#executivo .hero-grid .hero");
  if(heroes[0]){heroes[0].querySelector(".val").textContent=pcmNum(total);heroes[0].querySelector(".sub").textContent="intervenções: priorização PCM 100 dias + horizontes gerenciais de 1 e 2 anos"}
  if(heroes[1]){heroes[1].querySelector(".val").textContent=pcmNum(critical);heroes[1].querySelector(".sub").textContent="classificações críticas nas bases vigentes"}
  if(heroes[2]){heroes[2].querySelector(".val").textContent=pcmNum(Number(SUMMARY["100d"].cmb||0)+Number(SUMMARY["1ano"].cmb||0)+Number(SUMMARY["2anos"].cmb||0));heroes[2].querySelector(".sub").textContent="necessidades CMB rastreadas; novas ações não foram inferidas"}
- if(heroes[3]){heroes[3].querySelector(".lbl").textContent="Custo gerencial rastreado";heroes[3].querySelector(".val").textContent=money(cost);heroes[3].querySelector(".sub").textContent="somente valores disponíveis; lacunas permanecem a orçar"}
+ if(heroes[3]){heroes[3].querySelector(".lbl").textContent="Custo previsto mapeado";heroes[3].querySelector(".val").textContent=money(cost);heroes[3].querySelector(".sub").textContent="100 dias com orçamento por intervenção; 1 ano permanece a orçar; 2 anos conforme base gerencial"}
  var cards=document.querySelectorAll("#executivo .summary-cards .horizon-card");
  if(cards[0]){
   cards[0].querySelector(".big").textContent="529 ações";var m=cards[0].querySelectorAll(".mini");
   var vals=[pcmUnique(rows,"Instalacao"),pcmUnique(rows,"Municipio"),rows.filter(function(r){return r.Criticidade==="Crítica"}).length,SUMMARY["100d"].cmb,5,SUMMARY["100d"].custo?money(SUMMARY["100d"].custo):"A orçar"];
   vals.forEach(function(v,i){if(m[i]&&m[i].querySelector("b"))m[i].querySelector("b").textContent=typeof v==="number"?pcmNum(v):v});
   if(m[0])m[0].querySelector("span").textContent="instalações / unidades";
-  if(m[5])m[5].querySelector("span").textContent="custo rastreado";
+  if(m[5])m[5].querySelector("span").textContent="orçamento das intervenções";
  }
  var bars=document.querySelectorAll("#executivo .bar-row"),nums=[529,plans.p1.length,plans.p2.length],mx=Math.max.apply(null,nums);
  bars.forEach(function(b,i){if(i>2)return;var val=b.querySelector(".bar-val"),fill=b.querySelector(".bar-fill");if(val)val.textContent=pcmNum(nums[i]);if(fill)fill.style.width=(nums[i]/mx*100).toFixed(1)+"%"});
  var note=document.querySelector("#executivo .exec-lower .note");
- if(note)note.innerHTML="<b>Governança vigente:</b> o Plano de 100 Dias passa a seguir a ordem registrada em <b>03. Plano atualizado de 529 intervenções.xlsx</b>, vigente em 20/10/2026. A revisão mantém 529 ações, mas altera a sequência de prioridade de 68 registros. ORION 29/09 permanece como referência de ganhos, capacidade e custos rastreáveis e continua vigente para os horizontes de 1 e 2 anos até nova revisão. As 15 propostas de dosagem química em análise permanecem separadas e não alteram os 529 compromissos.";
+ if(note)note.innerHTML="<b>Governança vigente:</b> o Plano de 100 Dias passa a seguir a ordem registrada em <b>03. Plano atualizado de 529 intervenções.xlsx</b>, vigente em 20/10/2026. A revisão mantém 529 ações, mas altera a sequência de prioridade de 68 registros. ORION 29/09 permanece como referência de ganhos e capacidade e continua vigente para os horizontes de 1 e 2 anos até nova revisão. Para os 100 dias, o orçamento por intervenção usa o orçamento reconciliado vigente, sem somar novamente a base TPF. As 15 propostas de dosagem química em análise permanecem separadas e não alteram os 529 compromissos.";
  var title=document.querySelector(".title p");if(title)title.textContent="Aqua Pernambuco · BRK + Acciona · 100 dias: Plano PCM vigente 20/10/2026 · ganhos/capacidade: ORION 29/09/2026";
  var footer=document.querySelector(".footer div:last-child");if(footer)footer.textContent="Última atualização do portal: 20/10/2026 · ordem priorizada PCM atualizada na carteira de 529 ações";
 }
@@ -539,7 +539,7 @@ async function pcmLoad(){
   window.PCM_AUDIT={fonte:pcmRuntime.source,versao:pcmRuntime.version,total:529,historico:pcmRuntime.history,
    faixas:Object.keys(pcmBandOrder).map(function(k){return [k,pcmCount(rows,"Faixa PCM",k)]}),
    classes:Object.keys(pcmClassOrder).map(function(k){return [k,pcmCount(rows,"Classe PCM",k)]}),
-   criticas:SUMMARY["100d"].criticas,custoRastreado:cost,ordenacao:"ordem exata das linhas da planilha PCM vigente",registrosReposicionados:pcmRuntime.reordered};
+   criticas:SUMMARY["100d"].criticas,orcamentoPrevistoIntervencoes:cost,orcamentoRecomendado100d:pcmRuntime.budget.recommended100,custosRastreados:pcmRuntime.budget.knownCount,estimativasProvisorias:pcmRuntime.budget.estimatedCount,ordenacao:"ordem exata das linhas da planilha PCM vigente",registrosReposicionados:pcmRuntime.reordered};
   pcmRefreshExecutive(rows);
   if(mapInstances.p100){try{mapInstances.p100.map.remove()}catch(e){}delete mapInstances.p100}
   if(states.p100){delete states.p100;var panel=document.getElementById("p100");if(panel)panel.innerHTML="";if(activeTab==="p100")initPlan("p100")}
@@ -551,6 +551,7 @@ async function pcmLoad(){
 var pcmStyle=document.createElement("style");
 pcmStyle.textContent=".pcm-priority-summary{border-top:4px solid #253d46}.pcm-band-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:12px 0}.pcm-band-grid button{background:#f7f7f5;border:1px solid var(--line);padding:11px;text-align:left;color:var(--graph);cursor:pointer}.pcm-band-grid button:hover{border-color:var(--graph2);background:#eef2f0}.pcm-band-grid b{display:block;font-size:22px}.pcm-band-grid span{font-size:10px;color:var(--steel);font-weight:700}.pcm-toolbar{grid-template-columns:2fr repeat(8,minmax(118px,1fr))!important}.pcm-phases{grid-template-columns:repeat(3,minmax(0,1fr))!important}.pcm-detail{margin-top:0!important;border-top:4px solid #253d46!important}@media(max-width:1100px){.pcm-band-grid{grid-template-columns:repeat(3,1fr)}.pcm-toolbar{grid-template-columns:repeat(3,1fr)!important}.pcm-toolbar .search{grid-column:1/-1}}@media(max-width:650px){.pcm-band-grid{grid-template-columns:repeat(2,1fr)}.pcm-phases{grid-template-columns:1fr!important}}";
 pcmStyle.textContent+=".pcm-budget-detail{display:grid;gap:4px;background:#f5f7f6;border-left:4px solid var(--green);padding:12px;margin:0 0 14px}.pcm-budget-detail b{font-size:24px}.pcm-budget-detail span{font-weight:700}.pcm-budget-detail small{color:var(--steel)}";
+pcmStyle.textContent+=".pcm-budget-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.pcm-budget-grid div{background:#f7f7f5;border:1px solid var(--line);padding:11px}.pcm-budget-grid b{display:block;font-size:17px}.pcm-budget-grid span{font-size:10px;color:var(--steel)}@media(max-width:800px){.pcm-budget-grid{grid-template-columns:1fr 1fr}}";
 document.head.appendChild(pcmStyle);
 pcmLoad();
 
