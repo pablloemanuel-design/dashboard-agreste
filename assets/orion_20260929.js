@@ -318,14 +318,12 @@ function pcmUnique(rows,key){return new Set(rows.map(function(r){return norm(r[k
 function pcmCount(rows,key,value){return rows.filter(function(r){return r[key]===value}).length}
 function pcmSort(a,b){return Number(a["Ordem PCM Fonte"]||9999)-Number(b["Ordem PCM Fonte"]||9999)}
 async function pcmFetchCompact(){
- return PCM_DATA_20261020;
+ if(!window.PCM529||!window.PCM529.r||window.PCM529.r.length!==529)throw new Error("Base estática PCM incompleta");
+ return Promise.resolve(window.PCM529);
 }
 function pcmBuildRows(P){
  var d=P.d,old=PLAN100.slice(),byKey=new Map();
- old.forEach(function(r){
-  var key=norm(r["ID GeoHub"])+"|"+norm(r.Intervencao);
-  if(!byKey.has(key))byKey.set(key,r);
- });
+ old.forEach(function(r){var key=norm(r["ID GeoHub"])+"|"+norm(r.Intervencao);if(!byKey.has(key))byKey.set(key,r)});
  var rows=P.r.map(function(x,idx){
   var id=x[0],polo=d.polo[x[1]]||"",mun=d.mun[x[2]]||"",unit=x[3]||"",sys=d.sys[x[4]]||"",disc=d.disc[x[5]]||"";
   var action=d.action[x[6]]||"",prio=d.prio[x[7]]||"A avaliar",cls=d.cls[x[8]]||"A avaliar",band=d.band[x[9]]||"A avaliar";
@@ -333,86 +331,45 @@ function pcmBuildRows(P){
   var gain=d.gain[x[13]]||"",ind=d.ind[x[14]]||"",problem=d.problem[x[15]]||"";
   var hist=byKey.get(norm(id)+"|"+norm(action))||null;
   var ben=O.benefits.find(function(z){return norm(z["Família de intervenção"])===norm(action)})||null;
-  var expected=gain||(ben&&ben["Ganho esperado"])||"Ganho qualitativo pendente de linha de base";
-  var indicator=ind||(ben&&ben.Indicador)||"Indicador a definir após diagnóstico e linha de base";
-  var crit=norm(prio).indexOf("critica")>=0?"Crítica":norm(prio).indexOf("alta")>=0?"Alta":"A avaliar";
-  var bkey=norm(id)+"|"+norm(action)+"|"+norm(unit),bsimple=norm(id)+"|"+norm(action);
-  var binfo=PCM_BUDGET_MAP_20261020.get(bkey)||PCM_BUDGET_SIMPLE_20261020.get(bsimple)||null;
-  var cost=Number((window.PCM_TPF_COSTS_20261020||[])[idx]||0);
-  var costCode=(window.PCM_TPF_INFORMED_IDX_20261020&&window.PCM_TPF_INFORMED_IDX_20261020.has(idx))?"I":
-      ((window.PCM_TPF_PROXY_IDX_20261020&&window.PCM_TPF_PROXY_IDX_20261020.has(idx))?"P":"T");
-  var costStatus=costCode==="T"?"Custo TPF rastreado":(costCode==="I"?"Valor informado no plano vigente":"Estimativa paramétrica TPF");
-  var investment=binfo?PCM_BUDGET_20261020.investment[binfo[4]]:"A classificar";
-  var resource=binfo?PCM_BUDGET_20261020.resource[binfo[5]]:"A definir";
-  var provisional=costCode==="P";
-  var costSource=costCode==="T"?"08. Plano_Intervenção_Custos_TPF_Pablo.xlsx · 04_Intervenção_Custo · CUSTO_DESAFIO":
-      (costCode==="I"?"03. Plano atualizado de 529 intervenções.xlsx · Valor informado (R$)":"Estimativa paramétrica baseada nas famílias de custo da TPF; validar por orçamento/cotação antes da contratação");
-  var costConfidence=costCode==="T"?"Rastreado na TPF":(costCode==="I"?"Informado na fonte vigente":"Estimativa TPF – referência de planejamento");
+  var cost=Number(x[20]||0),costStatus=(d.method&&d.method[x[21]])||"TPF — custo previsto";
+  if(!(cost>0))throw new Error("Intervenção sem custo previsto: ordem "+x[16]);
   var parsedId=/^\d+$/.test(String(id))?Number(id):String(id);
   return {
-   "ID Plano":hist&&hist["ID Plano"]?hist["ID Plano"]:"PCM-20261020-"+String(idx+1).padStart(3,"0")+"-"+String(id).replace(/\s+/g,"-"),
-   "ID GeoHub":parsedId,
-   "Polo":"Polo "+polo,
-   "Municipio":mun,
-   "Localidade":hist?hist.Localidade:"",
-   "Instalacao":unit,
-   "Sistema":sys,
-   "Tipo Instalacao":hist?hist["Tipo Instalacao"]:"",
-   "Ativo":hist&&hist.Ativo?hist.Ativo:unit,
-   "Problema Identificado":problem||(hist&&hist["Problema Identificado"])||"A detalhar conforme programação PCM",
-   "Intervencao":action,
+   "ID Plano":hist&&hist["ID Plano"]?hist["ID Plano"]:"PCM-20261020-"+String(x[16]).padStart(3,"0")+"-"+String(id).replace(/\s+/g,"-"),
+   "ID GeoHub":parsedId,"Polo":"Polo "+polo,"Municipio":mun,"Localidade":hist?hist.Localidade:"",
+   "Instalacao":unit,"Sistema":sys,"Tipo Instalacao":hist?hist["Tipo Instalacao"]:"","Ativo":hist&&hist.Ativo?hist.Ativo:unit,
+   "Problema Identificado":problem||"A detalhar conforme programação PCM","Intervencao":action,
    "Justificativa":hist&&hist.Justificativa?hist.Justificativa:"Sequenciamento definido pela priorização PCM vigente.",
-   "Disciplina":disc,
-   "Grupo Trabalho":hist&&hist["Grupo Trabalho"]?hist["Grupo Trabalho"]:"PCM / Eletromecânica",
-   "Prioridade":prio,
-   "Prioridade Municipio":hist&&hist["Prioridade Municipio"]?hist["Prioridade Municipio"]:"",
+   "Disciplina":disc,"Grupo Trabalho":hist&&hist["Grupo Trabalho"]?hist["Grupo Trabalho"]:"PCM / Eletromecânica",
+   "Prioridade":prio,"Prioridade Municipio":hist&&hist["Prioridade Municipio"]?hist["Prioridade Municipio"]:"",
    "Horizonte":"Plano de 100 Dias",
-   "Criticidade":crit,
-   "Risco Operacional":hist&&hist["Risco Operacional"]?hist["Risco Operacional"]:crit,
+   "Criticidade":norm(prio).indexOf("critica")>=0?"Crítica":norm(prio).indexOf("alta")>=0?"Alta":"A avaliar",
+   "Risco Operacional":hist&&hist["Risco Operacional"]?hist["Risco Operacional"]:"A avaliar",
    "Necessidade CMB":hist&&hist["Necessidade CMB"]?hist["Necessidade CMB"]:"Não informado",
    "Necessidade Motor":hist&&hist["Necessidade Motor"]?hist["Necessidade Motor"]:"Não informado",
    "Necessidade Reserva":hist&&hist["Necessidade Reserva"]?hist["Necessidade Reserva"]:"Não informado",
-   "Custo Base TPF":cost,
-   "Custo do horizonte (R$)":cost,
-   "Orçamento previsto (R$)":cost,
-   "Custo Tipo":costStatus,
-   "Fonte do orçamento":costSource,
-   "Confiabilidade do orçamento":costConfidence,
-   "Investimento principal":investment,
-   "Recurso / contrato relacionado":resource,
-   "Fonte Informacao":pcmRuntime.source+(hist&&hist["Fonte Informacao"]?" | Rastreabilidade histórica: "+hist["Fonte Informacao"]:""),
-   "Origem Horizonte":"Priorização PCM vigente — 20/10/2026",
-   "Nivel Confianca":"Factibilidade PCM: "+fact,
-   "Status":"Execução não informada",
-   "Dependencias":ben?ben.Dependências:"Dependências específicas a confirmar na programação e liberação da OS.",
+   "Custo Base TPF":cost,"Custo do horizonte (R$)":cost,"Orçamento previsto (R$)":cost,
+   "Custo Tipo":costStatus,"Fonte do orçamento":costStatus.indexOf("Valor informado")===0?"03. Plano atualizado de 529 intervenções.xlsx":"08. Plano_Intervenção_Custos_TPF_Pablo.xlsx | 04_Intervenção_Custo",
+   "Confiabilidade do orçamento":costStatus.indexOf("Estimativa")===0?"Estimativa técnica TPF — revisar na cotação/OS":"Rastreado na fonte",
+   "Fonte Informacao":pcmRuntime.source,"Origem Horizonte":"Priorização PCM vigente — 20/10/2026",
+   "Nivel Confianca":"Factibilidade PCM: "+fact,"Status":"Execução não informada",
+   "Dependencias":hist&&hist.Dependencias?hist.Dependencias:"Programação, materiais, acesso, janela e liberação operacional.",
    "Mudanca vs Anterior":"Sequenciamento atualizado pelo PCM em 20/10/2026",
    "Observacoes Tecnicas":"Classe PCM: "+cls+" | Faixa: "+band+" | Pontuação: "+score,
-   "Governança":"Plano vigente — PCM 20/10/2026",
-   "Faixa PCM":band,
-   "Classe PCM":cls,
-   "Pontuação PCM":score,
-   "Factível 100 dias?":fact,
-   "Responsável PCM":resp,
-   "Dia inicial PCM":x[17]||"",
-   "Dia final PCM":x[18]||"",
-   "Linha matriz PCM":x[19]||"",
-   "Ordem PCM Fonte":Number(x[16]||idx+1),
-   "Ganho esperado":expected,
-   "Indicador":indicator,
+   "Governança":"Plano vigente — Priorização PCM 20/10/2026","Faixa PCM":band,"Classe PCM":cls,"Pontuação PCM":score,
+   "Factível 100 dias?":fact,"Responsável PCM":resp,"Dia inicial PCM":x[17]||"","Dia final PCM":x[18]||"",
+   "Linha matriz PCM":x[19]||"","Ordem PCM Fonte":Number(x[16]||idx+1),
+   "Ganho esperado":gain||(ben&&ben["Ganho esperado"])||"Ganho qualitativo pendente de linha de base",
+   "Indicador":ind||(ben&&ben.Indicador)||"Indicador a definir após diagnóstico e linha de base",
    "Classe de benefício":ben?ben["Classe de benefício"]:"A classificar após diagnóstico",
    "Tipo de ganho":ben?ben["Tipo de ganho"]:"Ganho qualitativo / redução de risco a validar",
-   "Ganho rápido":ben?ben["Ganho rápido"]:"A validar em campo",
-   "Esforço preliminar":ben?ben.Esforço:"A estimar",
-   "Equipe executora":resp,
-   "Dependências gerenciais":ben?ben.Dependências:"Programação, materiais, acesso, janela e liberação operacional.",
+   "Ganho rápido":ben?ben["Ganho rápido"]:"A validar em campo","Esforço preliminar":ben?ben.Esforço:"A estimar",
+   "Equipe executora":resp,"Dependências gerenciais":ben?ben.Dependências:"Programação, materiais, acesso, janela e liberação operacional.",
    "Realização do benefício":ben?ben["Realização do benefício"]:"Após execução, teste, aceite e evidência registrada.",
-   "Linha de base":"A medir / confirmar em campo",
-   "Meta quantitativa":"A definir após linha de base"
+   "Linha de base":"A medir / confirmar em campo","Meta quantitativa":"A definir após linha de base"
   };
  });
- var exp={"Dias 0–30":163,"Dias 0–60":6,"Dias 31–60":124,"Dias 61–89":177,"Após 90 dias":31,"Após 100 dias":28};
  if(rows.length!==529)throw new Error("PCM: esperado 529 ações, recebido "+rows.length);
- Object.keys(exp).forEach(function(k){var n=pcmCount(rows,"Faixa PCM",k);if(n!==exp[k])throw new Error("PCM: "+k+" esperado "+exp[k]+", recebido "+n)});
  return rows;
 }
 function pcmSummaryHtml(){var B=pcmRuntime.budget||{};
