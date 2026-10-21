@@ -318,10 +318,17 @@ function pcmUnique(rows,key){return new Set(rows.map(function(r){return norm(r[k
 function pcmCount(rows,key,value){return rows.filter(function(r){return r[key]===value}).length}
 function pcmSort(a,b){return Number(a["Ordem PCM Fonte"]||9999)-Number(b["Ordem PCM Fonte"]||9999)}
 async function pcmFetchCompact(){
- var bin=Uint8Array.from(atob(PCM_B64_20261020),function(c){return c.charCodeAt(0)});
- if(typeof DecompressionStream==="undefined")throw new Error("Navegador sem suporte à descompressão da base PCM");
- var stream=new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
- return JSON.parse(await new Response(stream).text());
+ var bytes=Uint8Array.from(atob(PCM_B64_20261020),function(c){return c.charCodeAt(0)});
+ if(typeof DecompressionStream!=="undefined"){
+  try{
+   var stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+   return JSON.parse(await new Response(stream).text());
+  }catch(err){console.warn("Falha no descompactador nativo, usando alternativa:",err)}
+ }
+ if(typeof pako!=="undefined"&&pako.ungzip){
+  return JSON.parse(new TextDecoder().decode(pako.ungzip(bytes)));
+ }
+ throw new Error("Descompressão indisponível");
 }
 function pcmBuildRows(P){
  var d=P.d,old=PLAN100.slice(),byKey=new Map();
@@ -553,7 +560,16 @@ pcmStyle.textContent=".pcm-priority-summary{border-top:4px solid #253d46}.pcm-ba
 pcmStyle.textContent+=".pcm-budget-detail{display:grid;gap:4px;background:#f5f7f6;border-left:4px solid var(--green);padding:12px;margin:0 0 14px}.pcm-budget-detail b{font-size:24px}.pcm-budget-detail span{font-weight:700}.pcm-budget-detail small{color:var(--steel)}";
 pcmStyle.textContent+=".pcm-budget-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.pcm-budget-grid div{background:#f7f7f5;border:1px solid var(--line);padding:11px}.pcm-budget-grid b{display:block;font-size:17px}.pcm-budget-grid span{font-size:10px;color:var(--steel)}@media(max-width:800px){.pcm-budget-grid{grid-template-columns:1fr 1fr}}";
 document.head.appendChild(pcmStyle);
-pcmLoad();
+// Load a widely supported gzip fallback before starting the PCM update.
+(function(){
+ if(typeof DecompressionStream!=="undefined"){pcmLoad();return}
+ var script=document.createElement("script");
+ script.src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js";
+ script.onload=pcmLoad;
+ script.onerror=function(){pcmLoad()};
+ document.head.appendChild(script);
+})();
+
 
 document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;pids.forEach(function(id){var box=document.getElementById(id+"_mapsec");if(box&&box.classList.contains("orion-map-full")){box.classList.remove("orion-map-full");document.body.style.overflow="";var b=document.getElementById(id+"_expand");if(b){b.textContent="⛶ Ampliar mapa";b.setAttribute("aria-expanded","false")}if(mapInstances[id])mapInstances[id].map.invalidateSize()}})});
 })();
