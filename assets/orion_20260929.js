@@ -526,9 +526,27 @@ pcmStyle.textContent=".pcm-priority-summary{border-top:4px solid #253d46}.pcm-ba
 pcmStyle.textContent+=".pcm-budget-detail{display:grid;gap:4px;background:#f5f7f6;border-left:4px solid var(--green);padding:12px;margin:0 0 14px}.pcm-budget-detail b{font-size:24px}.pcm-budget-detail span{font-weight:700}.pcm-budget-detail small{color:var(--steel)}";
 pcmStyle.textContent+=".pcm-budget-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.pcm-budget-grid div{background:#f7f7f5;border:1px solid var(--line);padding:11px}.pcm-budget-grid b{display:block;font-size:17px}.pcm-budget-grid span{font-size:10px;color:var(--steel)}@media(max-width:800px){.pcm-budget-grid{grid-template-columns:1fr 1fr}}";
 document.head.appendChild(pcmStyle);
-pcmLoad();
-
-
+function pcmLoadStaticParts(){
+ var srcs=[
+  "data/pcm529_dict.js?v=20261020-2351",
+  "data/pcm529_rows1.js?v=20261020-2351",
+  "data/pcm529_rows2.js?v=20261020-2351",
+  "data/pcm529_rows3.js?v=20261020-2351"
+ ];
+ var p=Promise.resolve();
+ srcs.forEach(function(src){
+  p=p.then(function(){return new Promise(function(resolve,reject){
+   var sc=document.createElement("script");sc.src=src;sc.onload=resolve;sc.onerror=function(){reject(new Error("Falha ao carregar "+src))};document.head.appendChild(sc);
+  })});
+ });
+ return p;
+}
+pcmLoadStaticParts().then(pcmLoad).catch(function(err){
+ console.error("Falha na base estática PCM:",err);
+ var note=document.createElement("div");note.className="orion-alert red";
+ note.innerHTML="<b>Atenção:</b> a base PCM vigente de 20/10/2026 não pôde ser carregada. Atualize a página.";
+ var ex=document.getElementById("executivo");if(ex)ex.prepend(note);
+});
 
 document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;pids.forEach(function(id){var box=document.getElementById(id+"_mapsec");if(box&&box.classList.contains("orion-map-full")){box.classList.remove("orion-map-full");document.body.style.overflow="";var b=document.getElementById(id+"_expand");if(b){b.textContent="⛶ Ampliar mapa";b.setAttribute("aria-expanded","false")}if(mapInstances[id])mapInstances[id].map.invalidateSize()}})});
 })();
