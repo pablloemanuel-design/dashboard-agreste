@@ -348,15 +348,16 @@ function pcmBuildRows(P){
   var crit=norm(prio).indexOf("critica")>=0?"Crítica":norm(prio).indexOf("alta")>=0?"Alta":"A avaliar";
   var bkey=norm(id)+"|"+norm(action)+"|"+norm(unit),bsimple=norm(id)+"|"+norm(action);
   var binfo=PCM_BUDGET_MAP_20261020.get(bkey)||PCM_BUDGET_SIMPLE_20261020.get(bsimple)||null;
-  var cost=binfo?Number(binfo[2]||0):0;
-  var costStatus=binfo?PCM_BUDGET_20261020.status[binfo[3]]:"Orçamento não conciliado";
+  var cost=Number((window.PCM_TPF_COSTS_20261020||[])[idx]||0);
+  var costCode=(window.PCM_TPF_INFORMED_IDX_20261020&&window.PCM_TPF_INFORMED_IDX_20261020.has(idx))?"I":
+      ((window.PCM_TPF_PROXY_IDX_20261020&&window.PCM_TPF_PROXY_IDX_20261020.has(idx))?"P":"T");
+  var costStatus=costCode==="T"?"Custo TPF rastreado":(costCode==="I"?"Valor informado no plano vigente":"Estimativa paramétrica TPF");
   var investment=binfo?PCM_BUDGET_20261020.investment[binfo[4]]:"A classificar";
   var resource=binfo?PCM_BUDGET_20261020.resource[binfo[5]]:"A definir";
-  var provisional=!!(binfo&&binfo[6]);
-  var costSource=provisional?"Reserva gerencial de 20% distribuída por família de investimento; orçamento/cotação específica pendente":
-      (costStatus==="Valor informado na fonte"?"Valor informado no plano vigente":"Orçamento reconciliado com a base de custos anterior");
-  var costConfidence=provisional?"Baixa – valor provisório para planejamento; substituir por orçamento/cotação":
-      (cost===0?"Rastreado – sem custo direto segregado na base":"Rastreado");
+  var provisional=costCode==="P";
+  var costSource=costCode==="T"?"08. Plano_Intervenção_Custos_TPF_Pablo.xlsx · 04_Intervenção_Custo · CUSTO_DESAFIO":
+      (costCode==="I"?"03. Plano atualizado de 529 intervenções.xlsx · Valor informado (R$)":"Estimativa paramétrica baseada nas famílias de custo da TPF; validar por orçamento/cotação antes da contratação");
+  var costConfidence=costCode==="T"?"Rastreado na TPF":(costCode==="I"?"Informado na fonte vigente":"Estimativa TPF – referência de planejamento");
   var parsedId=/^\d+$/.test(String(id))?Number(id):String(id);
   return {
    "ID Plano":hist&&hist["ID Plano"]?hist["ID Plano"]:"PCM-20261020-"+String(idx+1).padStart(3,"0")+"-"+String(id).replace(/\s+/g,"-"),
@@ -429,7 +430,7 @@ function pcmSummaryHtml(){var B=pcmRuntime.budget||{};
  "<p class=\"orion-small\">A carteira detalhada abaixo segue <b>exatamente a ordem das linhas da planilha vigente do PCM</b>. O dashboard não reclassifica nem reordena as OS por faixa, classe ou pontuação. Esses campos permanecem disponíveis para leitura e filtro, mas a sequência oficial é a registrada na fonte.</p>"+
  "<div class=\"pcm-band-grid\">"+
  [["D0–30",163,"Dias 0–30"],["D0–60",6,"Dias 0–60"],["D31–60",124,"Dias 31–60"],["D61–89",177,"Dias 61–89"],["Após D90",31,"Após 90 dias"],["Após D100",28,"Após 100 dias"]].map(function(x){return "<button type=\"button\" data-pcm-band=\""+x[2]+"\" onclick=\"pcmBandQuick('"+x[2]+"')\"><b>"+x[1]+"</b><span>"+x[0]+"</span></button>"}).join("")+
- "</div><div class=\"pcm-budget-grid\"><div><b>"+money(B.knownSum||0)+"</b><span>487 ações com custo rastreado</span></div><div><b>"+money(B.reserveTotal||0)+"</b><span>42 estimativas provisórias</span></div><div><b>"+money(B.interventionBudget||0)+"</b><span>orçamento previsto das 529 intervenções</span></div><div><b>"+money(B.orion100||0)+"</b><span>ORION · estrutura 100 dias</span></div><div><b>"+money(B.contracts100||0)+"</b><span>possíveis acionamentos</span></div><div><b>"+money(B.recommended100||0)+"</b><span>orçamento recomendado 100 dias</span></div></div><div class=\"orion-alert\"><b>Evolução da carteira:</b> 483 → 487 → <b>529 ações</b>. A revisão vigente mantém os mesmos 529 registros e quantitativos por faixa, porém altera a sequência de priorização: <b>68 registros mudaram de posição</b> em relação à versão anterior. As 15 propostas de dosagem química mantidas em “Evoluções técnicas em análise” continuam fora dos compromissos oficiais.</div>"+
+ "</div><div class=\"pcm-budget-grid\"><div><b id=\"p100_budget_exact\">—</b><span id=\"p100_budget_exact_n\">TPF rastreado</span></div><div><b id=\"p100_budget_proxy\">—</b><span id=\"p100_budget_proxy_n\">estimativas TPF</span></div><div><b id=\"p100_budget_informed\">—</b><span id=\"p100_budget_informed_n\">valores informados</span></div><div><b id=\"p100_budget_total\">—</b><span>orçamento previsto no recorte</span></div></div><div class=\"orion-alert\"><b>Evolução da carteira:</b> 483 → 487 → <b>529 ações</b>. A revisão vigente mantém os mesmos 529 registros e quantitativos por faixa, porém altera a sequência de priorização: <b>68 registros mudaram de posição</b> em relação à versão anterior. As 15 propostas de dosagem química mantidas em “Evoluções técnicas em análise” continuam fora dos compromissos oficiais.</div>"+
  "<div class=\"orion-alert red\"><b>Regra vigente:</b> prevalece a ordem registrada em “03. Plano atualizado de 529 intervenções.xlsx”. O dashboard não deve reconstruir uma prioridade própria a partir de pontuação, classe ou prazo.</div></section>";
 }
 window.pcmBandQuick=function(v){
@@ -449,7 +450,8 @@ function pcmDecoratePanel(id){
   var cls=document.createElement("select");cls.className="select";cls.id="p100_pcmclass";cls.setAttribute("aria-label","Classe PCM");cls.innerHTML="<option value=\"\">Classe PCM</option>"+Object.keys(pcmClassOrder).map(function(v){return "<option>"+esc(v)+"</option>"}).join("");cls.onchange=function(){applyPlan("p100")};
   toolbar.appendChild(band);toolbar.appendChild(cls);toolbar.classList.add("pcm-toolbar");
  }
- var kick=panel.querySelector(":scope > .section-kicker");if(kick)kick.textContent="Plano de 100 Dias · Priorização PCM vigente em 20/10/2026";var labels=panel.querySelectorAll(".plan-head .label");if(labels[5])labels[5].textContent="Orçamento previsto";
+ var kick=panel.querySelector(":scope > .section-kicker");if(kick)kick.textContent="Plano de 100 Dias · Priorização PCM vigente em 20/10/2026";
+ var costLabel=panel.querySelector(".plan-head .kpi:last-child .label");if(costLabel)costLabel.textContent="Orçamento previsto (TPF)";var labels=panel.querySelectorAll(".plan-head .label");if(labels[5])labels[5].textContent="Orçamento previsto";
 }
 phaseHtml=function(){
  var phases=[
@@ -480,6 +482,18 @@ applyPlan=function(id){
  });
  renderPlan(id);
 };
+function pcmUpdateFilteredBudget(rows){
+ var exact=rows.filter(function(r){return r["Custo Tipo"]==="Custo TPF rastreado"});
+ var proxy=rows.filter(function(r){return r["Custo Tipo"]==="Estimativa paramétrica TPF"});
+ var informed=rows.filter(function(r){return r["Custo Tipo"]==="Valor informado no plano vigente"});
+ function sum(a){return a.reduce(function(t,r){return t+Number(r["Orçamento previsto (R$)"]||0)},0)}
+ var total=sum(rows),pairs=[["p100_budget_exact",sum(exact)],["p100_budget_proxy",sum(proxy)],["p100_budget_informed",sum(informed)],["p100_budget_total",total]];
+ pairs.forEach(function(x){var e=document.getElementById(x[0]);if(e)e.textContent=money(x[1])});
+ var en=document.getElementById("p100_budget_exact_n");if(en)en.textContent=exact.length+" intervenções · TPF rastreado";
+ var pn=document.getElementById("p100_budget_proxy_n");if(pn)pn.textContent=proxy.length+" intervenções · estimativa paramétrica TPF";
+ var inf=document.getElementById("p100_budget_informed_n");if(inf)inf.textContent=informed.length+" intervenções · valor informado";
+ var c=document.getElementById("p100_count");if(c)c.textContent=rows.length+" intervenções • orçamento filtrado "+money(total)+" • "+exact.length+" TPF rastreadas • "+proxy.length+" estimadas • "+informed.length+" informadas";
+}
 renderPlan=function(id){
  pcmPrevious.render(id);
  if(id!=="p100"||!pcmRuntime.loaded||!states[id])return;
@@ -498,6 +512,7 @@ renderPlan=function(id){
    "<td class=\"money strong\">"+money(cost)+"<div class=\"small\">"+esc(r["Custo Tipo"])+"</div></td></tr>";
  }).join("");
  var tc=document.getElementById(id+"_tableCount");if(tc)tc.textContent=d.length+" registros · ordem oficial da planilha PCM vigente";
+ pcmUpdateFilteredBudget(d);
 };
 openDetail=function(id,index){
  pcmPrevious.detail(id,index);
@@ -546,7 +561,11 @@ async function pcmLoad(){
   window.PCM_AUDIT={fonte:pcmRuntime.source,versao:pcmRuntime.version,total:529,historico:pcmRuntime.history,
    faixas:Object.keys(pcmBandOrder).map(function(k){return [k,pcmCount(rows,"Faixa PCM",k)]}),
    classes:Object.keys(pcmClassOrder).map(function(k){return [k,pcmCount(rows,"Classe PCM",k)]}),
-   criticas:SUMMARY["100d"].criticas,orcamentoPrevistoIntervencoes:cost,orcamentoRecomendado100d:pcmRuntime.budget.recommended100,custosRastreados:pcmRuntime.budget.knownCount,estimativasProvisorias:pcmRuntime.budget.estimatedCount,ordenacao:"ordem exata das linhas da planilha PCM vigente",registrosReposicionados:pcmRuntime.reordered};
+   criticas:SUMMARY["100d"].criticas,orcamentoPrevistoIntervencoes:cost,
+   custosTpfRastreados:rows.filter(function(r){return r["Custo Tipo"]==="Custo TPF rastreado"}).length,
+   estimativasParametricasTpf:rows.filter(function(r){return r["Custo Tipo"]==="Estimativa paramétrica TPF"}).length,
+   valoresInformados:rows.filter(function(r){return r["Custo Tipo"]==="Valor informado no plano vigente"}).length,
+   ordenacao:"ordem exata das linhas da planilha PCM vigente",registrosReposicionados:pcmRuntime.reordered};
   pcmRefreshExecutive(rows);
   if(mapInstances.p100){try{mapInstances.p100.map.remove()}catch(e){}delete mapInstances.p100}
   if(states.p100){delete states.p100;var panel=document.getElementById("p100");if(panel)panel.innerHTML="";if(activeTab==="p100")initPlan("p100")}
@@ -560,15 +579,8 @@ pcmStyle.textContent=".pcm-priority-summary{border-top:4px solid #253d46}.pcm-ba
 pcmStyle.textContent+=".pcm-budget-detail{display:grid;gap:4px;background:#f5f7f6;border-left:4px solid var(--green);padding:12px;margin:0 0 14px}.pcm-budget-detail b{font-size:24px}.pcm-budget-detail span{font-weight:700}.pcm-budget-detail small{color:var(--steel)}";
 pcmStyle.textContent+=".pcm-budget-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.pcm-budget-grid div{background:#f7f7f5;border:1px solid var(--line);padding:11px}.pcm-budget-grid b{display:block;font-size:17px}.pcm-budget-grid span{font-size:10px;color:var(--steel)}@media(max-width:800px){.pcm-budget-grid{grid-template-columns:1fr 1fr}}";
 document.head.appendChild(pcmStyle);
-// Load a widely supported gzip fallback before starting the PCM update.
-(function(){
- if(typeof DecompressionStream!=="undefined"){pcmLoad();return}
- var script=document.createElement("script");
- script.src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js";
- script.onload=pcmLoad;
- script.onerror=function(){pcmLoad()};
- document.head.appendChild(script);
-})();
+pcmLoad();
+
 
 
 document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;pids.forEach(function(id){var box=document.getElementById(id+"_mapsec");if(box&&box.classList.contains("orion-map-full")){box.classList.remove("orion-map-full");document.body.style.overflow="";var b=document.getElementById(id+"_expand");if(b){b.textContent="⛶ Ampliar mapa";b.setAttribute("aria-expanded","false")}if(mapInstances[id])mapInstances[id].map.invalidateSize()}})});
